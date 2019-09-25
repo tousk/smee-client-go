@@ -75,13 +75,10 @@ func main() {
 		os.Exit(0)
 	}
 
-	fmt.Printf("target=%v, url=%v\n", opts.Target, opts.URL)
-
 	evCh := make(chan *Event)
 	go Notify(opts.URL, evCh)
 
 	for ev := range evCh {
-		fmt.Printf("%s %d", string(ev.Data), len(ev.Data))
 		if len(ev.Data) <= 2 {
 			continue
 		}
@@ -98,23 +95,25 @@ func main() {
 				fmt.Printf("Error: no signature found\n")
 				continue
 			}
+			if string(signature[:5]) != "sha1=" {
+				fmt.Printf("Warning: Skipping checking. signature is not SHA1: %s\n", signature)
+			} else {
+				body, _, _, err := jsonparser.Get(ev.Data, "body")
+				if err != nil {
+					fmt.Printf("Error: no body found\n")
+					continue
+				}
 
-			body, _, _, err := jsonparser.Get(ev.Data, "body")
-			if err != nil {
-				fmt.Printf("Error: no body found\n")
-				continue
-			}
-
-			if !ValidMAC([]byte(body), hex2bytes(string(signature)), body) {
-				fmt.Printf("#v", err)
-				fmt.Printf("\nInvalid HMAC\n")
-				continue
+				if !ValidMAC([]byte(body), hex2bytes(string(signature[5:])), []byte(opts.Secret)) {
+					fmt.Printf("\nError: Invalid HMAC\n")
+					continue
+				}
 			}
 		}
 
 		_, err = http.Post(opts.Target, string(contentType), bytes.NewBuffer(ev.Data))
 		if err != nil {
-			fmt.Printf("#v", err)
+			fmt.Printf("%v", err)
 		}
 	}
 }
