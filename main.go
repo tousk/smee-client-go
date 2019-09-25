@@ -89,6 +89,12 @@ func main() {
 			continue
 		}
 
+		body, _, _, err := jsonparser.Get(ev.Data, "body")
+		if err != nil {
+			fmt.Printf("Error: no body found\n")
+			continue
+		}
+
 		if opts.Secret != "" {
 			signature, _, _, err := jsonparser.Get(ev.Data, "x-hub-signature")
 			if err != nil {
@@ -97,13 +103,8 @@ func main() {
 			}
 			if string(signature[:5]) != "sha1=" {
 				fmt.Printf("Warning: Skipping checking. signature is not SHA1: %s\n", signature)
+				continue
 			} else {
-				body, _, _, err := jsonparser.Get(ev.Data, "body")
-				if err != nil {
-					fmt.Printf("Error: no body found\n")
-					continue
-				}
-
 				if !ValidMAC([]byte(body), hex2bytes(string(signature[5:])), []byte(opts.Secret)) {
 					fmt.Printf("\nError: Invalid HMAC\n")
 					continue
@@ -111,7 +112,7 @@ func main() {
 			}
 		}
 
-		_, err = http.Post(opts.Target, string(contentType), bytes.NewBuffer(ev.Data))
+		_, err = http.Post(opts.Target, string(contentType), bytes.NewBuffer(body))
 		if err != nil {
 			fmt.Printf("%v", err)
 		}
