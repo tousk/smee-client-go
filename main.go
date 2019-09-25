@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -35,18 +36,6 @@ func hex2bytes(hexstr string) []byte {
 	}
 	return dst
 }
-
-/*
-Usage: smee [options]
-
-Options:
-  -v, --version          output the version number
-  -u, --url <url>        URL of the webhook proxy service. Default: https://smee.io/new
-  -t, --target <target>  Full URL (including protocol and path) of the target service the events will forwarded to. Default: http://127.0.0.1:PORT/PATH
-  -p, --port <n>         Local HTTP server port (default: 3000)
-  -P, --path <path>      URL path to post proxied requests to` (default: "/")
-  -h, --help             output usage information
-*/
 
 type Options struct {
 	Version []bool `short:"v" long:"version" description:"output the version number"`
@@ -89,6 +78,18 @@ func main() {
 			continue
 		}
 
+		github_event, _, _, err := jsonparser.Get(ev.Data, "x-github-event")
+		if err != nil {
+			fmt.Printf("Error: no x-github-event found\n")
+			continue
+		}
+
+		github_delivery, _, _, err := jsonparser.Get(ev.Data, "x-github-delivery")
+		if err != nil {
+			fmt.Printf("Error: no x-github-delivery found\n")
+			continue
+		}
+
 		body, _, _, err := jsonparser.Get(ev.Data, "body")
 		if err != nil {
 			fmt.Printf("Error: no body found\n")
@@ -112,9 +113,23 @@ func main() {
 			}
 		}
 
-		_, err = http.Post(opts.Target, string(contentType), bytes.NewBuffer(body))
+		fmt.Printf("Received %s", string(ev.Data))
+
+		req, err := http.NewRequest("POST", opts.Target, bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", string(contentType))
+		req.Header.Set("x-github-event", string(github_event))
+		req.Header.Set("x-github-delivery", string(github_delivery))
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Printf("%v", err)
+			panic(err)
 		}
+		defer resp.Body.Close()
+
+		fmt.Println("response Status:", resp.Status)
+		fmt.Println("response Headers:", resp.Header)
+		rspbody, _ := ioutil.ReadAll(resp.Body)
+		fmt.Println("response Body:", string(rspbody))
 	}
 }
