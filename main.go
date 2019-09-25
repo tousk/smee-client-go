@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/buger/jsonparser"
 	flags "github.com/jessevdk/go-flags"
@@ -72,24 +73,6 @@ func main() {
 			continue
 		}
 
-		contentType, _, _, err := jsonparser.Get(ev.Data, "content-type")
-		if err != nil {
-			fmt.Printf("Error: no content-type found\n")
-			continue
-		}
-
-		github_event, _, _, err := jsonparser.Get(ev.Data, "x-github-event")
-		if err != nil {
-			fmt.Printf("Error: no x-github-event found\n")
-			continue
-		}
-
-		github_delivery, _, _, err := jsonparser.Get(ev.Data, "x-github-delivery")
-		if err != nil {
-			fmt.Printf("Error: no x-github-delivery found\n")
-			continue
-		}
-
 		body, _, _, err := jsonparser.Get(ev.Data, "body")
 		if err != nil {
 			fmt.Printf("Error: no body found\n")
@@ -112,13 +95,15 @@ func main() {
 				}
 			}
 		}
-
 		fmt.Printf("Received %s", string(ev.Data))
 
 		req, err := http.NewRequest("POST", opts.Target, bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", string(contentType))
-		req.Header.Set("x-github-event", string(github_event))
-		req.Header.Set("x-github-delivery", string(github_delivery))
+		jsonparser.ObjectEach(ev.Data, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
+			if strings.HasPrefix(string(key), "x-") || strings.ToLower(string(key)) == "content-type" {
+				req.Header.Set(string(key), string(value))
+			}
+			return nil
+		})
 
 		client := &http.Client{}
 		resp, err := client.Do(req)
