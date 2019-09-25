@@ -35,10 +35,9 @@ func liveReq(verb, uri string, body io.Reader) (*http.Request, error) {
 
 //Event is a go representation of an http server-sent event
 type Event struct {
-	URI     string
-	Type    string
-	Data    io.Reader
-	DataLen int
+	URI  string
+	Type []byte
+	Data []byte
 }
 
 //GetReq is a function to return a single request. It will be used by notify to
@@ -94,11 +93,9 @@ func Notify(uri string, evCh chan<- *Event) error {
 		currEvent = &Event{URI: uri}
 		switch string(spl[0]) {
 		case eName:
-			currEvent.Type = string(bytes.TrimSpace(spl[1]))
+			currEvent.Type = bytes.TrimSpace(spl[1])
 		case dName:
-			tmpbuf := bytes.TrimSpace(spl[1])
-			currEvent.Data = bytes.NewBuffer(tmpbuf)
-			currEvent.DataLen = len(tmpbuf)
+			currEvent.Data = bytes.TrimSpace(spl[1])
 			evCh <- currEvent
 		}
 		if err == io.EOF {
